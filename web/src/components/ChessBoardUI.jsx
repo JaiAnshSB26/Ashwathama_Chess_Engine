@@ -60,27 +60,77 @@ export default function ChessBoardUI() {
   }
 
   function applyMove(from, to) {
-    const next = new Chess(game.fen());
-    const result = next.move({
+    // 1. apply HUMAN move locally
+    const afterHuman = new Chess(game.fen());
+    const moveResult = afterHuman.move({
       from,
       to,
       promotion: "q",
     });
 
-    if (result) {
-      // update chess engine state
-      setGame(next);
-      setBoardState(next.board());
+    if (!moveResult) return; // illegal move, ignore
 
-      // append SAN (like "e4" or "Nf3")
-      setMoveHistory(prev => [...prev, result.san]);
+    setGame(afterHuman);
+    setBoardState(afterHuman.board());
+    setMoveHistory(prev => [...prev, moveResult.san]);
 
-      // (future) ask backend here:
-      // 1. send FEN -> Flask
-      // 2. get bestmove + eval
-      // 3. setThinking(false), setEvalScore(serverEval), apply engine move
+    if (afterHuman.isGameOver()) {
+      setThinking(false);
+      return;
     }
+
+    // 2. ask backend for engine reply
+    const fenNow = afterHuman.fen();
+    setThinking(true);
+
+    fetch("http://127.0.0.1:5001/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fen: fenNow,
+        movetime: 500,
+      }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.bestmove) {
+          console.error("Engine error:", data);
+          setThinking(false);
+          return;
+        }
+
+        const engineFrom = data.bestmove.slice(0, 2);
+        const engineTo = data.bestmove.slice(2, 4);
+
+        const afterEngine = new Chess(afterHuman.fen());
+        const engMoveRes = afterEngine.move({
+          from: engineFrom,
+          to: engineTo,
+          promotion: "q",
+        });
+
+        if (!engMoveRes) {
+          console.error("Engine gave illegal move?", data.bestmove);
+          setThinking(false);
+          return;
+        }
+
+        setGame(afterEngine);
+        setBoardState(afterEngine.board());
+        setMoveHistory(prev => [...prev, engMoveRes.san]);
+
+        if (typeof data.eval === "number") {
+          setEvalScore(data.eval);
+        }
+      })
+      .catch(err => {
+        console.error("Fetch /move failed:", err);
+      })
+      .finally(() => {
+        setThinking(false);
+      });
   }
+
 
   function getLegalMovesFrom(square) {
     return game
