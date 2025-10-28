@@ -6,7 +6,8 @@
 echo "Building Ashwathama Chess Engine..."
 
 # Compile with g++ (C++17, optimizations enabled)
-g++ -std=c++17 -O2 -o engine src/main.cpp -Isrc
+# Allow multiple definitions (workaround for header-only code)
+g++ -std=c++17 -O2 -Wl,--allow-multiple-definition -o engine src/main.cpp src/uci.cpp -Isrc
 
 if [ $? -eq 0 ]; then
     echo ""

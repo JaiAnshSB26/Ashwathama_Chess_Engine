@@ -6,7 +6,8 @@ REM --------------------------------------------------
 echo Building Ashwathama Chess Engine...
 
 REM Compile with g++ (C++17, optimizations enabled)
-g++ -std=c++17 -O2 -o engine.exe src/main.cpp -Isrc
+REM Allow multiple definitions (workaround for header-only code)
+g++ -std=c++17 -O2 -Wl,--allow-multiple-definition -o engine.exe src/main.cpp src/uci.cpp -Isrc
 
 if %ERRORLEVEL% EQU 0 (
     echo.

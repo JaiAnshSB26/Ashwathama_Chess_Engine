@@ -3,6 +3,7 @@
 #include "evaluate.hpp"
 #include "file_interpreter.hpp"
 #include "utils.hpp"
+#include "uci.hpp"
 #include <sys/stat.h> // For checking file existence
 
 // Function to check if a file exists
@@ -23,6 +24,12 @@ void ensureMovesFileExists(const char* filename) {
     }
 }
 int main(int argc, char* argv[]) {
+    // Check for UCI mode
+    if (argc > 1 && std::strcmp(argv[1], "--uci") == 0) {
+        UCI::run_uci_loop();
+        return 0;
+    }
+
     //if (argc != 3){
     //    std::cerr << "Error: More than 3 arguments given!" << std::endl;
     //    return 1;
@@ -30,7 +37,7 @@ int main(int argc, char* argv[]) {
 
     // argv[1] = input file
     // argv[2] = output file
-    const char* input_file = "history.csv";
+    const char* input_file = "tests/history.csv";
     const char* output_file = "move.csv";
 
     // Parse command-line arguments
