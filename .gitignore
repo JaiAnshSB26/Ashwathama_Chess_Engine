@@ -1,0 +1,118 @@
+# ============================================
+# C++ Build Artifacts
+# ============================================
+# Binaries
+*.exe
+*.out
+*.app
+Ashwathama
+engine
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# CMake
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# ============================================
+# Python Backend (Flask API)
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+ENV/
+.venv
+api/venv/
+api/env/
+*.egg-info/
+dist/
+
+# ============================================
+# Node.js / Frontend
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.next/
+out/
+web/dist/
+web/build/
+
+# ============================================
+# IDE & Editor Files
+# ============================================
+.vscode/
+*.code-workspace
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS-Specific Files
+# ============================================
+.DS_Store
+.AppleDouble
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================================
+# Chess Engine Specific
+# ============================================
+# Generated move/history files (test outputs)
+moves.csv
+move.csv
+output.csv
+game_*.csv
+
+# Tournament data (from CuteChess/Arena)
+tournaments/
+*.pgn
+
+# Engine logs
+*.log
+
+# ============================================
+# Deployment & Environment
+# ============================================
+.env
+.env.local
+.env.*.local
+
+# Docker (if we add it later)
+docker-compose.override.yml
+
+# ============================================
+# Individual README files (teacher grading only)
+# ============================================
+jai-ansh.bindra.README.md
+kingshuk.gupta.README.md
+mohamed-iyad.boualem.README.md
+tomas.noronha-gradowski.README.md
+ziji.wang.README.md
