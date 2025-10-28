@@ -40,3 +40,58 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Big glass container around board + sidebar */
+.play-shell {
+  position: relative;
+  background: radial-gradient(
+    circle at 40% 30%,
+    rgba(0, 255, 200, 0.08) 0%,
+    rgba(0, 100, 150, 0.04) 40%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  box-shadow:
+    0 0 40px rgba(0, 255, 180, 0.15),
+    0 0 120px rgba(0, 120, 255, 0.12);
+  transition: box-shadow 0.25s ease, filter 0.25s ease;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Glow intensifies when hovering anywhere over the play shell */
+.play-shell:hover {
+  box-shadow:
+    0 0 60px rgba(0, 255, 180, 0.28),
+    0 0 160px rgba(0, 120, 255, 0.22),
+    0 0 240px rgba(255, 255, 120, 0.12);
+  filter: drop-shadow(0 0 20px rgba(255, 255, 150, 0.2));
+}
+
+/* Smooth cyber scrollbars in sidebar (move history) */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(233, 69, 96, 0.6); /* that pink/red accent you’re using */
+  border-radius: 999px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(233, 69, 96, 0.8);
+}
+
+/* Optional (for devs) shared neon helper if you want to apply a glow to specific boxes
+   (like ENGINE EVAL panel or Download PGN button)
+   You can add `className="shadow-glow-green"` to any div/button.
+*/
+.shadow-glow-green {
+  box-shadow:
+    0 0 15px rgba(0, 255, 180, 0.4),
+    0 0 30px rgba(0, 120, 255, 0.2),
+    0 0 80px rgba(0, 255, 180, 0.08);
+}

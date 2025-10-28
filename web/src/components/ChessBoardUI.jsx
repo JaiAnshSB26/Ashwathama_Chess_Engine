@@ -36,7 +36,8 @@ export default function ChessBoardUI() {
       const maxByHeight = vh - 220;
       const maxByWidth = vw * 0.6; // leave room for sidebar on desktop
 
-      const size = Math.min(maxByHeight, maxByWidth, 480);
+      //   const size = Math.min(maxByHeight, maxByWidth, 480);
+      const size = Math.min(maxByHeight * 0.9, maxByWidth, 520);
       setBoardPx(size < 260 ? 260 : size);
     }
     handleResize();
@@ -117,11 +118,11 @@ export default function ChessBoardUI() {
   return (
     <div className="flex flex-col items-center w-full px-4">
       {/* responsive wrapper */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
+      <div className="flex flex-col lg:flex-row gap-10 items-start justify-center">
         {/* ==== BOARD AREA ==== */}
         <div className="flex flex-col items-center">
           {/* fancy frame */}
-          <div
+          {/* <div
             className="rounded-2xl p-[2px] shadow-2xl"
             style={{
               background:
@@ -129,7 +130,17 @@ export default function ChessBoardUI() {
               boxShadow:
                 "0 30px 80px rgba(0,0,0,0.9), 0 0 30px rgba(233,69,96,0.15)",
             }}
+          > */}
+          <div
+            className="rounded-2xl p-[2px] shadow-[0_0_40px_rgba(0,255,200,0.2)]"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(0,255,180,0.15), rgba(0,120,255,0.1))",
+              boxShadow:
+                "0 0 60px rgba(0,255,180,0.15), 0 0 120px rgba(0,120,255,0.15)",
+            }}
           >
+
             <div
               className="rounded-2xl shadow-inner overflow-hidden"
               style={{
