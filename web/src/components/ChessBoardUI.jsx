@@ -82,33 +82,70 @@ export default function ChessBoardUI() {
     }
   }
 
-  function handleSquareClick(squareName) {
-    if (!selectedSquare) {
-      // first click: select a piece
-      const piece = game.get(squareName);
-      if (!piece) return;
-      if (piece.color !== game.turn()) return;
-
-      const movesFromHere = game.moves({
-        square: squareName,
+  function getLegalMovesFrom(square) {
+    return game
+      .moves({
+        square,
         verbose: true,
-      });
+      })
+      .map(m => m.to); // returns ["e4","e5",...]
+  }
 
-      setSelectedSquare(squareName);
-      setLegalTargets(movesFromHere.map(m => m.to));
+  function handleSquareClick(squareName) {
+    // --- CASE A: nothing selected yet ---
+    if (!selectedSquare) {
+      const piece = game.get(squareName);
+      // must click a piece that exists AND it's your turn color
+      if (piece && piece.color === game.turn()) {
+        setSelectedSquare(squareName);
+        setLegalTargets(getLegalMovesFrom(squareName));
+      } else {
+        // clicked empty square or opponent piece first -> ignore, keep nothing selected
+        setSelectedSquare(null);
+        setLegalTargets([]);
+      }
       return;
     }
 
-    // second click: try to move
+    // --- CASE B: we already had something selected ---
     const from = selectedSquare;
-    const to = squareName;
+    const isSameSquare = squareName === from;
+    const isLegalDest = legalTargets.includes(squareName);
 
-    applyMove(from, to);
+    // B1. Clicked a legal destination -> make the move
+    if (isLegalDest) {
+      applyMove(from, squareName);
+      // applyMove does not clear selection itself, so we do it here:
+      setSelectedSquare(null);
+      setLegalTargets([]);
+      return;
+    }
 
-    // clear selection
-    setSelectedSquare(null);
-    setLegalTargets([]);
+    // B2. Clicked the same square again -> unselect / cancel
+    if (isSameSquare) {
+      setSelectedSquare(null);
+      setLegalTargets([]);
+      return;
+    }
+
+    // B3. Clicked a *different* square. Possible meanings:
+    //  - maybe it's another piece YOU can control -> switch selection to that piece
+    //  - otherwise -> clear everything (cancel)
+
+    const piece = game.get(squareName);
+
+    if (piece && piece.color === game.turn()) {
+      // switch selection to new piece
+      setSelectedSquare(squareName);
+      setLegalTargets(getLegalMovesFrom(squareName));
+    } else {
+      // clicked something irrelevant (empty / enemy not legally capturable from prev selection?)
+      // -> clear
+      setSelectedSquare(null);
+      setLegalTargets([]);
+    }
   }
+
 
   const squareSizePx = boardPx / 8;
 
