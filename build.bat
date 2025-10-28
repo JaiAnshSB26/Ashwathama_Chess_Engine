@@ -6,7 +6,7 @@ REM --------------------------------------------------
 echo Building Ashwathama Chess Engine...
 
 REM Compile with g++ (C++17, optimizations enabled)
-g++ -std=c++17 -O2 -o engine.exe main.cpp -I.
+g++ -std=c++17 -O2 -o engine.exe src/main.cpp -Isrc
 
 if %ERRORLEVEL% EQU 0 (
     echo.

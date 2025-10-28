@@ -6,7 +6,7 @@
 echo "Building Ashwathama Chess Engine..."
 
 # Compile with g++ (C++17, optimizations enabled)
-g++ -std=c++17 -O2 -o engine main.cpp -I.
+g++ -std=c++17 -O2 -o engine src/main.cpp -Isrc
 
 if [ $? -eq 0 ]; then
     echo ""
