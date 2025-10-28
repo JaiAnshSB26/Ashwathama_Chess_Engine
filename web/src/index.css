@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    /* @apply border-border; */
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-chess-dark via-chess-accent to-chess-light text-white;
+    @apply min-h-screen m-0 p-0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .chess-gradient {
+    @apply bg-gradient-to-br from-purple-600 via-pink-600 to-blue-600;
+  }
+}
