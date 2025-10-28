@@ -101,12 +101,32 @@ tournaments/
 # ============================================
 # Deployment & Environment
 # ============================================
+# Environment variables (CRITICAL - contains secrets)
 .env
 .env.local
+.env.production
 .env.*.local
+*.env
+
+# API keys and secrets (if stored separately)
+secrets/
+*.key
+*.pem
+*.crt
+config/secrets.json
+
+# GCP credentials (if downloaded)
+gcp-key.json
+service-account.json
+*-credentials.json
 
 # Docker (if we add it later)
 docker-compose.override.yml
+
+# SSH keys (if any)
+*.ppk
+id_rsa
+id_rsa.pub
 
 # ============================================
 # Individual README files (teacher grading only)
