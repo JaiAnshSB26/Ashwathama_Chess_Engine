@@ -1,4 +1,4 @@
-export default function MoveHistory({ history, evalScore, thinking }) {
+export default function MoveHistory({ history, evalScore, thinking, onDownloadPGN }) {
   // Note for the newer developers: history is array of SAN strings like ["e4", "e5", "Nf3", "Nc6", ...]
   const rows = [];
   for (let i = 0; i < history.length; i += 2) {
@@ -58,10 +58,14 @@ export default function MoveHistory({ history, evalScore, thinking }) {
         </div>
       </div>
 
-      {/* Placeholder for PGN download button (coming soon) */}
+      {/* Real PGN Stuff now */}
       <button
-        className="rounded-lg border border-white/10 bg-[rgba(233,69,96,0.08)] text-chess-highlight text-xs font-semibold py-2 shadow-[0_0_15px_rgba(233,69,96,0.6)] hover:bg-[rgba(233,69,96,0.15)] transition-colors"
-        disabled={rows.length === 0}
+        onClick={onDownloadPGN}
+        className="w-full py-3 rounded-xl bg-[rgba(40,0,20,0.4)]
+                   text-pink-200 text-sm font-medium tracking-wide
+                   border border-pink-500/30 shadow-[0_0_20px_rgba(255,0,90,0.4)]
+                   hover:bg-[rgba(60,0,30,0.6)] transition-colors"
+        disabled={history.length === 0}
       >
         ⬇ Download PGN
       </button>
