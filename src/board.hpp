@@ -486,6 +486,23 @@ public:
         }
         std::cout << "     a   b   c   d   e   f   g   h  \n";
     }
+
+    void debug_print_board_only() const {
+        std::cout << "     a   b   c   d   e   f   g   h  \n";
+        std::cout << "   +---+---+---+---+---+---+---+---+\n";
+        for (int rank = 7; rank >= 0; rank--) {
+            std::cout << " " << (rank + 1) << " ";
+            for (int file = 0; file < 8; file++) {
+                int square = rank * 8 + file;
+                char piece = pieceTypeToChar(chessboard[square]);
+                std::cout << "| " << piece << " ";
+            }
+            std::cout << "| " << (rank + 1) << "\n";
+            std::cout << "   +---+---+---+---+---+---+---+---+\n";
+        }
+        std::cout << "     a   b   c   d   e   f   g   h  \n";
+    }
+
 };
 
 #endif //BOARD_HPP

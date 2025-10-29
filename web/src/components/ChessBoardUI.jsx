@@ -484,19 +484,35 @@ export default function ChessBoardUI() {
   // Core gameplay logic
   // -------------------------
   function applyMove(from, to) {
+    // clone current board
     const afterHuman = new Chess(game.fen());
 
-    const humanResult = afterHuman.move({
-      from,
-      to,
-      promotion: "q",
-    });
+    let humanResult = null;
+    try {
+      humanResult = afterHuman.move({
+        from,
+        to,
+        promotion: "q",
+      });
+    } catch (err) {
+      console.warn("[CLIENT] illegal move threw", { from, to }, err);
 
-    if (!humanResult) {
-      console.warn("[ILLEGAL MOVE IGNORED]", from, to);
+      // important: unlock UI so user can click something else
+      setSelectedSquare(null);
+      setLegalTargets([]);
       return;
     }
 
+    if (!humanResult) {
+      console.warn("[CLIENT] move rejected as illegal", { from, to });
+
+      // same unlock
+      setSelectedSquare(null);
+      setLegalTargets([]);
+      return;
+    }
+
+    // ... keep rest of your logic the same after this point
     const humanMoveUCI =
       humanResult.from + humanResult.to + (humanResult.promotion || "");
 
@@ -510,7 +526,6 @@ export default function ChessBoardUI() {
     uciRef.current = historyAfterHuman;
     setUciHistory(historyAfterHuman);
 
-    // Debugging logs
     console.log("----------------------------------------------------");
     console.log("[HUMAN MOVE APPLIED]");
     console.log("  humanResult.san =", humanResult.san);
@@ -563,12 +578,17 @@ export default function ChessBoardUI() {
           engineMoveUCI.length > 4 ? engineMoveUCI.slice(4, 5) : undefined;
 
         const afterEngine = new Chess(afterHuman.fen());
-        const engineResult = afterEngine.move({
-          from: engineFrom,
-          to: engineTo,
-          promotion: enginePromotion || "q",
-        });
-
+        let engineResult = null;
+        try {
+          engineResult = afterEngine.move({
+            from: engineFrom,
+            to: engineTo,
+            promotion: enginePromotion || "q",
+          });
+        } catch (err) {
+          console.error("[ENGINE ILLEGAL MOVE THROW?]", engineMoveUCI, err);
+          return;
+        }
         if (!engineResult) {
           console.error("[ENGINE ILLEGAL MOVE?]", engineMoveUCI);
           return;

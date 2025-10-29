@@ -252,7 +252,8 @@ void handle_position(board& b, const std::string& command) {
     std::cerr << "      Turn to move: "
               << (b.boardTurn == White ? "White" : "Black")
               << "\n";
-    b.print_board("");
+    // b.print_board("");
+    b.debug_print_board_only();
 }
 
 
