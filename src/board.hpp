@@ -43,6 +43,24 @@ public:
     bool Rook_QueenSide_moved;      // used for castling rights
     bool Occupied_KingSide_Castling_Alley;     // used for castling rights
     bool Occupied_QueenSide_Castling_Alley;     // used for castling rights
+
+    // -------------------------
+    // Castling helper masks / squares
+    // -------------------------
+
+    // Which squares originally held each rook
+    Bitboard WhiteRookKingSideSquare  = (1ULL << 7);   // h1
+    Bitboard WhiteRookQueenSideSquare = (1ULL << 0);   // a1
+    Bitboard BlackRookKingSideSquare  = (1ULL << 63);  // h8
+    Bitboard BlackRookQueenSideSquare = (1ULL << 56);  // a8
+
+    // Alleys the king must cross / must be empty to allow castling
+    // White: f1,g1 and b1,c1,d1
+    // Black: f8,g8 and b8,c8,d8
+    Bitboard WhiteRookKingSideAlley   = (1ULL << 5) | (1ULL << 6);        // f1,g1
+    Bitboard WhiteRookQueenSideAlley  = (1ULL << 1) | (1ULL << 2) | (1ULL << 3); // b1,c1,d1
+    Bitboard BlackRookKingSideAlley   = (1ULL << 61) | (1ULL << 62);      // f8,g8
+    Bitboard BlackRookQueenSideAlley  = (1ULL << 57) | (1ULL << 58) | (1ULL << 59); // b8,c8,d8
     
 
     // -- Constructor --
@@ -81,6 +99,9 @@ public:
         King_moved = false;
         Rook_KingSide_moved = false;
         Rook_QueenSide_moved = false;
+
+        Occupied_KingSide_Castling_Alley = false;
+        Occupied_QueenSide_Castling_Alley = false;
 
 
 
@@ -225,7 +246,10 @@ public:
 
     // Apply a single move to the board, including castling, en passant, promotion
     void apply_move(const ::Move &m) {
+        // Keep any derived occupancy / alley info updated if you rely on it.
+        // (We might revisit this if it causes side effects.)
         Sides_Update();
+
         // Convert one-hot bits to integer squares
         int srcSquare = __builtin_ctzll(m.src_pos);
         int dstSquare = __builtin_ctzll(m.dst_pos);
@@ -233,142 +257,205 @@ public:
         // Identify which piece is moving
         PieceType movingPiece = chessboard[srcSquare];
         if (movingPiece == e) {
-            std::cerr << "Warning: No piece found at source position for this move.\n";
+            std::cerr << "Warning: No piece at source square " << srcSquare << "\n";
             return;
         }
+
         bool isWhiteMoving = isWhitePiece(movingPiece);
 
-        //CASTLING RIGHTS UPDATES
-        //King_moved update
-        if (movingPiece == K && isWhiteMoving){
+        // ============================
+        // CASTLING RIGHTS PRE-UPDATE
+        // ============================
+
+        // If the king moved, that side cannot castle anymore
+        if (movingPiece == K && isWhiteMoving) {
             King_moved = true;
         } else if (movingPiece == k && !isWhiteMoving) {
             King_moved = true;
         }
-        //Rook_KingSide_moved update
-        if (movingPiece == R && isWhiteMoving && (WhiteRookKingSideSquare && m.src_pos)){
-            Rook_KingSide_moved = true;
-        } else if (movingPiece == r && !isWhiteMoving && (BlackRookKingSideSquare && m.src_pos)) {
-            Rook_KingSide_moved = true;
-        }
-        //Rook_QueenSide_moved update
-        if (movingPiece == R && isWhiteMoving && (WhiteRookQueenSideSquare && m.src_pos)){
-            Rook_KingSide_moved = true;
-        } else if (movingPiece == r && !isWhiteMoving && (BlackRookQueenSideSquare && m.src_pos)) {
-            Rook_KingSide_moved = true;
+
+        // If a rook moved from its original squares, kill that rook's castling right.
+        // NOTE: we compare equality (==), not boolean &&
+        if (movingPiece == R && isWhiteMoving) {
+            if (m.src_pos == WhiteRookKingSideSquare) {
+                Rook_KingSide_moved = true;
+            }
+            if (m.src_pos == WhiteRookQueenSideSquare) {
+                Rook_QueenSide_moved = true;
+            }
+        } else if (movingPiece == r && !isWhiteMoving) {
+            if (m.src_pos == BlackRookKingSideSquare) {
+                Rook_KingSide_moved = true;
+            }
+            if (m.src_pos == BlackRookQueenSideSquare) {
+                Rook_QueenSide_moved = true;
+            }
         }
 
+        // ============================
+        // CASTLING MOVE EXECUTION
+        // ============================
 
-        // CASTLING DETECTION 
-        // Example: White King from e1 -> g1 = squares 4 -> 6
         bool isCastling = false;
-        if (movingPiece == K && (srcSquare == 4) && (dstSquare == 6 || dstSquare == 2)) {
-            // White king castling
+        // White king castles: e1 (4) -> g1 (6) or c1 (2)
+        if (movingPiece == K && srcSquare == 4 && (dstSquare == 6 || dstSquare == 2)) {
             isCastling = true;
             if (dstSquare == 6) {
-                // White kingside: move rook from h1(7) to f1(5)
+                // White O-O: rook h1(7) -> f1(5)
                 move_piece_in_board(7, 5);
             } else {
-                // White queenside: move rook from a1(0) to d1(3)
+                // White O-O-O: rook a1(0) -> d1(3)
                 move_piece_in_board(0, 3);
             }
-        } else if (movingPiece == k && (srcSquare == 60) && (dstSquare == 62 || dstSquare == 58)) {
-            // Black king castling
-            isCastling = true;
-            if (dstSquare == 62) {
-                // Black kingside: move rook from h8(63) to f8(61)
-                move_piece_in_board(63, 61);
-            } else {
-                // Black queenside: move rook from a8(56) to d8(59)
-                move_piece_in_board(56, 59);
-            }
-        }
 
-        // If castling, we just do the king move, remove en passant. Done
-        if (isCastling) {
-            // Move the king
+            // Move the king itself
             move_piece_in_board(srcSquare, dstSquare);
+
+            // After castling, white's castling rights are gone for sure
+            King_moved = true;
+            Rook_KingSide_moved = true;
+            Rook_QueenSide_moved = true;
+
+            // No en passant target after castling
             en_passant_square = -1;
-            // Switch turn
+
+            // Flip turn
             boardTurn = (boardTurn == White) ? Black : White;
             return;
         }
 
-        // EN PASSANT DETECTION
-        // Check if the piece is a pawn that moves diagonally into an empty square
+        // Black king castles: e8 (60) -> g8 (62) or c8 (58)
+        if (movingPiece == k && srcSquare == 60 && (dstSquare == 62 || dstSquare == 58)) {
+            isCastling = true;
+            if (dstSquare == 62) {
+                // Black O-O: rook h8(63) -> f8(61)
+                move_piece_in_board(63, 61);
+            } else {
+                // Black O-O-O: rook a8(56) -> d8(59)
+                move_piece_in_board(56, 59);
+            }
+
+            move_piece_in_board(srcSquare, dstSquare);
+
+            King_moved = true;
+            Rook_KingSide_moved = true;
+            Rook_QueenSide_moved = true;
+
+            en_passant_square = -1;
+            boardTurn = (boardTurn == White) ? Black : White;
+            return;
+        }
+
+        // ============================
+        // EN PASSANT CAPTURE CHECK
+        // ============================
+
         bool enPassantCapture = false;
-        if ((movingPiece == P || movingPiece == p)) {
-            int srcFile = srcSquare % 8, srcRank = srcSquare / 8;
-            int dstFile = dstSquare % 8, dstRank = dstSquare / 8;
+        if (movingPiece == P || movingPiece == p) {
+            int srcFile = srcSquare % 8;
+            int srcRank = srcSquare / 8;
+            int dstFile = dstSquare % 8;
+            int dstRank = dstSquare / 8;
+
             if (en_passant_square != -1) {
-                if (dstSquare == en_passant_square && 
-                    (std::abs(dstFile - srcFile) == 1) && 
-                    ((isWhiteMoving && dstRank == srcRank + 1) || 
-                     (!isWhiteMoving && dstRank == srcRank - 1))) {
-                    // en passant capture
+                if (dstSquare == en_passant_square &&
+                    (std::abs(dstFile - srcFile) == 1) &&
+                    (
+                        (isWhiteMoving && dstRank == srcRank + 1) ||
+                        (!isWhiteMoving && dstRank == srcRank - 1)
+                    )
+                ) {
+                    // This is en passant
                     enPassantCapture = true;
-                    int capturedPawnSquare = isWhiteMoving 
-                                             ? (en_passant_square - 8) 
-                                             : (en_passant_square + 8);
+
+                    int capturedPawnSquare = isWhiteMoving
+                        ? (en_passant_square - 8)  // white takes black pawn behind
+                        : (en_passant_square + 8); // black takes white pawn behind
+
                     remove_piece_at(1ULL << capturedPawnSquare);
                 }
             }
         }
 
-        // If normal capture (not en-passant), remove piece at dst if any
+        // ============================
+        // NORMAL CAPTURE (NOT EN PASSANT)
+        // ============================
         if (!enPassantCapture) {
+            // If there's an enemy piece actually on dstSquare, remove it
             remove_piece_at(m.dst_pos);
         }
 
-        // Move the piece from src to dst
+        // ============================
+        // PHYSICALLY MOVE PIECE src->dst
+        // ============================
         bool movedOk = move_piece_in_board(srcSquare, dstSquare);
         if (!movedOk) {
-            std::cerr << "Warning: Could not move piece from " 
-                      << srcSquare << " to " << dstSquare << "\n";
+            std::cerr << "Warning: move_piece_in_board failed from "
+                    << srcSquare << " to " << dstSquare << "\n";
             en_passant_square = -1;
-            // Switch turn anyway
             boardTurn = (boardTurn == White) ? Black : White;
             return;
         }
 
+        // ============================
         // PROMOTION
+        // ============================
         if ((movingPiece == P || movingPiece == p) && (m.promotion != '\0')) {
-            // For white, rank=7; for black, rank=0
-            int rank = dstSquare / 8;
-            if ((movingPiece == P && rank == 7) || (movingPiece == p && rank == 0)) {
-                // Convert char e.g. 'q' to PieceType
-                // (Notice your old code used 'k' to mean knight, but let's adapt.)
+            int dstRank = dstSquare / 8;
+            bool whitePromote = (movingPiece == P && dstRank == 7);
+            bool blackPromote = (movingPiece == p && dstRank == 0);
+
+            if (whitePromote || blackPromote) {
                 PieceType newPT = e;
-                switch(m.promotion) {
+                switch (m.promotion) {
                     case 'q': newPT = (isWhiteMoving ? Q : q); break;
                     case 'r': newPT = (isWhiteMoving ? R : r); break;
                     case 'b': newPT = (isWhiteMoving ? B : b); break;
-                    case 'k': // ironically 'k' means knight in your code
-                    case 'n': newPT = (isWhiteMoving ? N : n); break;
+                    case 'n': // 'n' for knight, also accept 'k' if you used that internally
+                    case 'k': newPT = (isWhiteMoving ? N : n); break;
                     default:
-                        std::cerr << "Warning: Invalid promotion char: " << m.promotion << "\n";
+                        std::cerr << "Warning: Invalid promotion char " << m.promotion << "\n";
                         break;
                 }
-                // Remove the old pawn from the bitboard
+
+                // clear pawn bit at dst
                 bitboards[movingPiece] &= ~(1ULL << dstSquare);
-                // Set the new piece
+                // set new piece bit
                 bitboards[newPT] |= (1ULL << dstSquare);
-                // Update the chessboard array
+                // fix mailbox
                 chessboard[dstSquare] = newPT;
             }
         }
 
-        // EN PASSANT SQUARE SETTING (double push from rank1->3 or rank6->4)
-        en_passant_square = -1; // default
-        if ((movingPiece == P && (srcSquare / 8) == 1 && (dstSquare / 8) == 3)) {
-            en_passant_square = srcSquare + 8; // rank 2
-        } else if ((movingPiece == p && (srcSquare / 8) == 6 && (dstSquare / 8) == 4)) {
-            en_passant_square = srcSquare - 8; // rank 5
+        // ============================
+        // EN PASSANT TARGET SQUARE UPDATE
+        // ============================
+        // default: no en passant available
+        en_passant_square = -1;
+
+        // white pawn double push from rank 2 -> 4 (1 -> 3)
+        if (movingPiece == P) {
+            int srcRank = srcSquare / 8;
+            int dstRank = dstSquare / 8;
+            if (srcRank == 1 && dstRank == 3) {
+                en_passant_square = srcSquare + 8; // the square it "jumped over"
+            }
+        }
+        // black pawn double push from rank 7 -> 5 (6 -> 4)
+        else if (movingPiece == p) {
+            int srcRank = srcSquare / 8;
+            int dstRank = dstSquare / 8;
+            if (srcRank == 6 && dstRank == 4) {
+                en_passant_square = srcSquare - 8;
+            }
         }
 
-        // Switch turn
+        // ============================
+        // SWITCH SIDE TO MOVE
+        // ============================
         boardTurn = (boardTurn == White) ? Black : White;
     }
+
 
     // Apply a sequence of moves to the board
     void apply_moves(const std::vector<::Move> &moves) {

@@ -3,8 +3,38 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 
 namespace UCI {
+
+// Apply a sequence of UCI moves like ["e2e4","b8c6", ...] to board b
+// using the engine's own Move struct + apply_move().
+// We also debug after each move.
+static void apply_move_list_uci(board& b, const std::vector<std::string>& moves) {
+    for (const std::string& mvStr : moves) {
+        // Convert "e2e4" -> Move(src_bitboard, dst_bitboard, promotionChar)
+        Move m = uci_to_move(mvStr, b);
+
+        if (m.src_pos == 0 && m.dst_pos == 0) {
+            std::cerr << "[UCI] WARNING: couldn't parse move '" << mvStr << "'\n";
+            break;
+        }
+
+        // Before applying, record whose turn we *think* it is
+        std::string beforeSide = (b.boardTurn == White ? "White" : "Black");
+
+        // Apply to board
+        b.apply_move(m);
+
+        // After applying, confirm turn flipped
+        std::string afterSide = (b.boardTurn == White ? "White" : "Black");
+
+        std::cerr << "[UCI] applied " << mvStr
+                  << " | turn before: " << beforeSide
+                  << " -> after: "    << afterSide
+                  << "\n";
+    }
+}
 
 /**
  * Main UCI loop - reads commands from stdin
@@ -122,69 +152,196 @@ void parse_fen(board& chess_board, const std::string& fen) {
 /**
  * Handle "position" command
  */
+// void handle_position(board& b, const std::string& command) {
+//     std::istringstream iss(command);
+//     std::string token;
+    
+//     iss >> token; // Skip "position"
+//     iss >> token; // Get "startpos" or "fen"
+
+//     if (token == "startpos") {
+//         // Start position FEN
+//         parse_fen(b, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+//     } else if (token == "fen") {
+//         // Read FEN string (rest of line until "moves")
+//         std::string fen;
+//         while (iss >> token && token != "moves") {
+//             if (!fen.empty()) fen += " ";
+//             fen += token;
+//         }
+//         parse_fen(b, fen);
+//     }
+
+//     // Apply moves if present
+//     if (token == "moves" || (iss >> token && token == "moves")) {
+//         while (iss >> token) {
+//             Move move = uci_to_move(token, b);
+//             if (move.src_pos != 0 && move.dst_pos != 0) {
+//                 b.apply_move(move);
+//             }
+//         }
+//     }
+//     // === DEBUG: after applying all moves ===
+//     std::cerr << "[UCI] After position command:\n";
+//     b.print_board(""); // assuming you already have print_board in your board class
+//     std::cerr << "Turn to move: "
+//               << (b.boardTurn == White ? "White" : "Black")
+//               << "\n";
+
+// }
+
 void handle_position(board& b, const std::string& command) {
     std::istringstream iss(command);
     std::string token;
-    
-    iss >> token; // Skip "position"
-    iss >> token; // Get "startpos" or "fen"
 
+    iss >> token; // "position"
+    iss >> token; // "startpos" or "fen"
+
+    // 1. Build the base board
     if (token == "startpos") {
-        // Start position FEN
+        // start from normal chess
         parse_fen(b, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+        // Check if there's a "moves" section after startpos
+        std::string maybe;
+        if (iss >> maybe) {
+            if (maybe == "moves") {
+                token = "moves";
+            } else {
+                token = maybe;
+            }
+        }
     } else if (token == "fen") {
-        // Read FEN string (rest of line until "moves")
+        // reconstruct FEN (can have spaces) until we hit "moves" or run out
         std::string fen;
         while (iss >> token && token != "moves") {
             if (!fen.empty()) fen += " ";
             fen += token;
         }
-        parse_fen(b, fen);
-    }
 
-    // Apply moves if present
-    if (token == "moves" || (iss >> token && token == "moves")) {
-        while (iss >> token) {
-            Move move = uci_to_move(token, b);
-            if (move.src_pos != 0 && move.dst_pos != 0) {
-                b.apply_move(move);
+        parse_fen(b, fen);
+
+        if (token != "moves") {
+            // We stopped because no "moves" keyword yet.
+            std::string maybe;
+            if (iss >> maybe && maybe == "moves") {
+                token = "moves";
+            } else {
+                token = maybe;
             }
         }
+    } else {
+        // unknown position format
+        std::cerr << "[UCI] handle_position: UNKNOWN token after 'position': " << token << "\n";
     }
+
+    // 2. If we have a moves list, collect it
+    std::vector<std::string> moves_list;
+    if (token == "moves") {
+        std::string mv;
+        while (iss >> mv) {
+            moves_list.push_back(mv);
+        }
+    }
+
+    // 3. Apply them with engine's real move logic
+    apply_move_list_uci(b, moves_list);
+
+    // 4. Debug final board state
+    std::cerr << "[UCI] handle_position complete.\n";
+    std::cerr << "      Turn to move: "
+              << (b.boardTurn == White ? "White" : "Black")
+              << "\n";
+    b.print_board("");
 }
+
 
 /**
  * Handle "go" command - calculate and output best move
  */
+// void handle_go(board& b, const std::string& command) {
+//     std::istringstream iss(command);
+//     std::string token;
+    
+//     iss >> token; // Skip "go"
+    
+//     // Parse go parameters
+//     int depth = 5; // Default depth
+//     while (iss >> token) {
+//         if (token == "depth") {
+//             iss >> depth;
+//         } else if (token == "movetime") {
+//             // TODO: Implement time-based search
+//             int movetime;
+//             iss >> movetime;
+//         } else if (token == "infinite") {
+//             depth = 10; // Search deeper for infinite
+//         }
+//     }
+
+//     // Calculate best move
+//     Evaluator evaluator;
+//     evaluator.max_depth = depth;
+//     Move bestMove = evaluator.get_best_move(b);
+
+//     // Output best move in UCI format
+//     std::string uci_move = move_to_uci(bestMove, b);
+//     std::cout << "bestmove " << uci_move << std::endl;
+// }
+
+
 void handle_go(board& b, const std::string& command) {
     std::istringstream iss(command);
     std::string token;
     
-    iss >> token; // Skip "go"
+    iss >> token; // this was "go"
     
-    // Parse go parameters
-    int depth = 5; // Default depth
+    int depth = 5;
+    int movetime = -1; // ms, optional
+
+    // Parse params like "depth 6", "movetime 500"
     while (iss >> token) {
         if (token == "depth") {
             iss >> depth;
         } else if (token == "movetime") {
-            // TODO: Implement time-based search
-            int movetime;
             iss >> movetime;
         } else if (token == "infinite") {
-            depth = 10; // Search deeper for infinite
+            depth = 10; // arbitrary fallback
         }
     }
 
-    // Calculate best move
+    std::cerr << "[UCI] handle_go: side to move is "
+              << (b.boardTurn == White ? "White" : "Black")
+              << ", depth=" << depth
+              << (movetime >= 0 ? (", movetime=" + std::to_string(movetime)) : "")
+              << "\n";
+
     Evaluator evaluator;
     evaluator.max_depth = depth;
+
     Move bestMove = evaluator.get_best_move(b);
 
-    // Output best move in UCI format
+    if (bestMove.src_pos == 0 && bestMove.dst_pos == 0) {
+        // evaluator couldn't find anything
+        std::cerr << "[UCI] get_best_move() returned NO MOVE. Falling back.\n";
+
+        // At this point we SHOULD try to generate any legal move and output it.
+        // We don't have the full movegen function in the snippets,
+        // so for now we emit '0000', which means "no legal move" in UCI.
+        //
+        // This prevents the Python bridge from hanging, and lets the
+        // frontend stop gracefully.
+        std::cout << "bestmove 0000" << std::endl;
+        return;
+    }
+
     std::string uci_move = move_to_uci(bestMove, b);
+    std::cerr << "[UCI] bestmove (from search) = " << uci_move << "\n";
+
+    // Always respond with bestmove line, guaranteed
     std::cout << "bestmove " << uci_move << std::endl;
 }
+
 
 /**
  * Convert internal Move to UCI format

@@ -3,7 +3,7 @@ from flask_cors import CORS
 from engine_runner import engine
 
 app = Flask(__name__)
-CORS(app)  # allow frontend http://localhost:5173 etc to call us
+CORS(app)
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -13,25 +13,34 @@ def health():
 def move():
     data = request.get_json(force=True)
 
-    fen = data.get("fen")
-    movetime = data.get("movetime", 500)  # ms, frontend can tweak later
+    moves_list = data.get("moves", [])
+    movetime = data.get("movetime", 500)
 
-    if not fen:
-        return jsonify({"error": "No FEN provided"}), 400
+    print(f"[/move] moves_list = {moves_list} movetime = {movetime}")
 
-    bestmove, eval_score = engine.get_bestmove(fen, movetime_ms=movetime)
+    bestmove, eval_score = engine.get_bestmove_from_moves(
+        moves_list,
+        movetime_ms=movetime,
+    )
 
+    print(f"[/move] engine returned: {bestmove} {eval_score}")
+
+    # HARDENING: don't 500 if engine fails to emit a move
     if not bestmove:
+        print("!!! ENGINE FAILED TO MOVE on sequence:", moves_list)
+
         return jsonify({
-            "error": "Engine did not return a move",
-            "eval": eval_score
-        }), 500
+            "bestmove": None,
+            "eval": eval_score,
+            "note": "engine had no move (likely internal fail)",
+            "moves_seen": moves_list,
+        }), 200
 
     return jsonify({
         "bestmove": bestmove,
-        "eval": eval_score
+        "eval": eval_score,
     }), 200
 
 if __name__ == "__main__":
-    # local dev mode (not production)
+    # local dev
     app.run(host="0.0.0.0", port=5001, debug=True)
