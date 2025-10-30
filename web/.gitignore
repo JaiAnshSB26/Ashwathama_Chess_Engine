@@ -28,3 +28,6 @@ dist-ssr
 .venv
 api/venv/
 api/env/
+
+api/.venv/
+api/.venv
