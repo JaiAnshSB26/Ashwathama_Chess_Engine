@@ -42,6 +42,8 @@ export default function ChessBoardUI() {
   const [engineError, setEngineError] = useState(false);
   const engineErrorRef = useRef(false);
 
+  const BACKEND =
+    import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5055";
 
   // responsive board sizing
   const [boardPx, setBoardPx] = useState(420);
@@ -192,8 +194,8 @@ export default function ChessBoardUI() {
 
     console.log("[FETCH -> /move] payload =", payload);
 
-    // earlier (somehow worked before laptop restarted): fetch("http://127.0.0.1.5001/move", {)
-    fetch("http://127.0.0.1:5055/move", {
+    // earlier (somehow worked before laptop restarted): fetch("http://127.0.0.1.5055/move", {)
+    fetch(`${BACKEND}/move`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
