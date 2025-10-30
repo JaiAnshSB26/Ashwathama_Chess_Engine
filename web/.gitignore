@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+##Extras
+.venv/
+.venv
+api/venv/
+api/env/
