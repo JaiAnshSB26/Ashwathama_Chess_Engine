@@ -42,6 +42,15 @@ export default function ChessBoardUI() {
   const [engineError, setEngineError] = useState(false);
   const engineErrorRef = useRef(false);
 
+  const [moveTimeMs, setMoveTimeMs] = useState(500);
+
+  const [reqId, setReqId] = useState(0);
+  const activeReqRef = useRef(0);
+  const fetchAbortRef = useRef(null);
+
+  const [inCheck, setInCheck] = useState(false);
+  const gameOverRef = useRef(false);
+
 
   // responsive board sizing
   const [boardPx, setBoardPx] = useState(420);
@@ -59,6 +68,13 @@ export default function ChessBoardUI() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const pieceSrc = (type, color) => {
+    // chess.js uses type in ['p','n','b','r','q','k'] and color 'w'|'b'
+    // const key = (color === 'w' ? type.toUpperCase() : type);
+    return `/pieces/${color}${type.toUpperCase()}.svg`; // e.g., wP.svg, bQ.svg
+  };
+
+
   // translate indices to squares like "e4"
   function idxToSquare(fileIdx, rankIdxFromTop) {
     const rankNumber = 8 - rankIdxFromTop;
@@ -66,38 +82,63 @@ export default function ChessBoardUI() {
     return fileLetter + rankNumber;
   }
 
-  function updateStatus(chessObj) {
-    if (chessObj.isCheckmate()) {
-      // if it's mate, the side that JUST moved is the winner.
-      // chessObj.turn() is the side *to move now* (the loser).
-      const winner = chessObj.turn() === "w" ? "Black" : "White";
-      setGameStatus(`Checkmate — ${winner} wins`);
-      return;
-    }
-
-    if (chessObj.isStalemate()) {
-      setGameStatus("Stalemate — Draw");
-      return;
-    }
-
-    if (chessObj.isDraw()) {
-      setGameStatus("Draw");
-      return;
-    }
-
-    if (chessObj.isCheck()) {
-      setGameStatus("Check!");
-      return;
-    }
-
-    // normal ongoing game
-    setGameStatus("");
+  function formatEval(pawns) {
+    if (pawns == null || Number.isNaN(pawns)) return "";
+    return (pawns >= 0 ? "+" : "") + pawns.toFixed(2);
   }
 
+  // function updateStatus(chessObj) {
+  //   if (chessObj.isCheckmate()) {
+  //     // if it's mate, the side that JUST moved is the winner.
+  //     // chessObj.turn() is the side *to move now* (the loser).
+  //     const winner = chessObj.turn() === "w" ? "Black" : "White";
+  //     setGameStatus(`Checkmate — ${winner} wins`);
+  //     return;
+  //   }
+
+  //   if (chessObj.isStalemate()) {
+  //     setGameStatus("Stalemate — Draw");
+  //     return;
+  //   }
+
+  //   if (chessObj.isDraw()) {
+  //     setGameStatus("Draw");
+  //     return;
+  //   }
+
+  //   if (chessObj.isCheck()) {
+  //     setGameStatus("Check!");
+  //     return;
+  //   }
+
+  //   // normal ongoing game
+  //   setGameStatus("");
+  // }
+  function updateStatus(g) {
+    const over = g.isGameOver();     // works with your chess.js
+    gameOverRef.current = over;
+
+    // Show “Check!” separately so it DOESN’T block clicks
+    setInCheck(g.isCheck());         // you currently have isCheck()
+
+    if (over) {
+      let msg = "";
+      if (g.isCheckmate()) {
+        msg = `Checkmate — ${g.turn() === "w" ? "Black" : "White"} wins`;
+      } else if (g.isStalemate() || g.isDraw()) {
+        msg = "Stalemate — Draw";
+      } else {
+        msg = "Game over";
+      }
+      setGameStatus(msg);
+    } else {
+      setGameStatus("");             // don’t set “Check!” here anymore
+    }
+  }
   // -------------------------
   // Core gameplay logic
   // -------------------------
-  function applyMove(from, to) {
+  async function applyMove(from, to) {
     // clone current board
     const afterHuman = new Chess(game.fen());
 
@@ -164,122 +205,107 @@ export default function ChessBoardUI() {
     setSelectedSquare(null);
     setLegalTargets([]);
 
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
+    const myReq = reqId + 1;
+    setReqId(myReq);
+    activeReqRef.current = myReq;
+
     const payload = {
       moves: historyAfterHuman,
-      movetime: 500,
+      movetime: moveTimeMs,
     };
 
     console.log("[FETCH -> /move] payload =", payload);
 
     // earlier (somehow worked before laptop restarted): fetch("http://127.0.0.1.5001/move", {)
-    fetch("http://127.0.0.1:5055/move", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => {
-        console.log("[ENGINE RESPONSE STATUS]", res.status);
-        return res.json();
-      })
-      .then((data) => {
-        console.log("[/move RESPONSE]", data);
-
-        if (!data.bestmove) {
-          console.error("[ENGINE ERROR]", data);
-          // freeze the game so we don't desync
-          setEngineError(true);
-          setGameStatus("Engine error — please start a New Game");
-          setThinking(false);
-          setSelectedSquare(null);
-          setLegalTargets([]);
-          return;
-        }
-
-        const engineMoveUCI = data.bestmove;
-        const engineFrom = engineMoveUCI.slice(0, 2);
-        const engineTo = engineMoveUCI.slice(2, 4);
-        const enginePromotion =
-          engineMoveUCI.length > 4 ? engineMoveUCI.slice(4, 5) : undefined;
-
-        const afterEngine = new Chess(afterHuman.fen());
-        let engineResult = null;
-        try {
-          engineResult = afterEngine.move({
-            from: engineFrom,
-            to: engineTo,
-            promotion: enginePromotion || "q",
-          });
-        } catch (err) {
-          console.error("[ENGINE ILLEGAL MOVE THROW?]", engineMoveUCI, err);
-          setEngineError(true);
-          return;
-        }
-        if (!engineResult) {
-          console.error("[ENGINE ILLEGAL MOVE?]", engineMoveUCI);
-          setEngineError(true);
-          return;
-        }
-
-        // update UI board after engine reply
-        setGame(afterEngine);
-        setBoardState(afterEngine.board());
-        setMoveHistory((prev) => [...prev, engineResult.san]);
-
-        updateStatus(afterEngine);
-
-        if (afterEngine.isGameOver()) {
-            // game ended on engine's move, freeze thinking
-            setThinking(false);
-        }
-
-        // ---- Update UCI history again (ref + state) ----
-        const finalHistory = [...historyAfterHuman, engineMoveUCI];
-        uciRef.current = finalHistory;
-        setUciHistory(finalHistory);
-
-        console.log("[ENGINE MOVE APPLIED]");
-        console.log("  engineMoveUCI =", engineMoveUCI);
-        console.log("  engineResult.san =", engineResult.san);
-        console.log("  finalHistory =", finalHistory);
-        console.log("  FEN afterEngine =", afterEngine.fen());
-
-        if (typeof data.eval === "number") {
-          setEvalScore(data.eval);
-        }
-
-        //Update status after engine move.
-        updateStatus(afterEngine);
-
-        //If engine just ended the game.
-        if (afterEngine.isGameOver()) {
-            console.log("[GAME OVER] after engine move");
-            // thinking will also get cleared in finally
-            // but we can defensively kill highlights here
-            setThinking(false);
-            setSelectedSquare(null);
-            setLegalTargets([]);
-        }
-      })
-      .catch((err) => {
-        console.error("[FETCH ERROR]", err);
-        setEngineError(true);
-      })
-      .finally(() => {
-        if (!engineErrorRef.current) {
-          setThinking(false);
-          setSelectedSquare(null);
-          setLegalTargets([]);
-        } else {
-            setThinking(false);
-        }
-        console.log("----------------------------------------------------");
+    try {  
+      const res = await fetch("http://127.0.0.1:5055/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,   // ← add this line
       });
+      console.log("[ENGINE RESPONSE STATUS]", res.status);
+      const data = await res.json();
+      console.log("[/move RESPONSE]", data);
+
+      if (myReq !== activeReqRef.current) return;
+
+      if (!data.bestmove) {
+        console.error("[ENGINE ERROR]", data);
+        setEngineError(true);
+        setGameStatus("Engine error — please start a New Game");
+        return;
+      }
+
+      const engineMoveUCI = data.bestmove;
+      const engineFrom = engineMoveUCI.slice(0, 2);
+      const engineTo   = engineMoveUCI.slice(2, 4);
+      const enginePromotion =
+        engineMoveUCI.length > 4 ? engineMoveUCI.slice(4, 5) : undefined;
+
+      const afterEngine = new Chess(afterHuman.fen());
+      let engineResult;
+      try {
+        engineResult = afterEngine.move({
+          from: engineFrom,
+          to: engineTo,
+          promotion: enginePromotion || "q",
+        });
+      } catch (e) {
+        console.error("[ENGINE ILLEGAL MOVE THROW?]", engineMoveUCI, e);
+        setEngineError(true);
+        return;
+      }
+      if (!engineResult) {
+        console.error("[ENGINE ILLEGAL MOVE?]", engineMoveUCI);
+        setEngineError(true);
+        return;
+      }
+
+      // commit engine move to UI
+      setGame(afterEngine);
+      setBoardState(afterEngine.board());
+      setMoveHistory((prev) => [...prev, engineResult.san]);
+
+      if (typeof data.eval === "number") setEvalScore(data.eval);
+
+      updateStatus(afterEngine);
+
+      // update UCI history
+
+      const finalHistory = [...historyAfterHuman, engineMoveUCI];
+      uciRef.current = finalHistory;
+      setUciHistory(finalHistory);
+
+      console.log("[ENGINE MOVE APPLIED]");
+      console.log("  engineMoveUCI =", engineMoveUCI);
+      console.log("  engineResult.san =", engineResult.san);
+      console.log("  finalHistory =", finalHistory);
+      console.log("  FEN afterEngine =", afterEngine.fen());
+
+    } catch (err) {
+      if (err.name === "AbortError") return; // we canceled on purpose
+      console.error("[FETCH ERROR]", err);
+      setEngineError(true);
+    } finally {
+      setThinking(false);
+      setSelectedSquare(null);
+      setLegalTargets([]);
+      console.log("----------------------------------------------------");
+    }
   }
 
   // -------------------------
   // UI click handling
   // -------------------------
   function handleSquareClick(squareName) {
+    if (thinking || gameOverRef.current) return;
     if (!selectedSquare) {
       const piece = game.get(squareName);
       if (!piece) return;
@@ -352,26 +378,40 @@ export default function ChessBoardUI() {
   }
 
   function resetGame() {
-    const fresh = new Chess();
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+      fetchAbortRef.current = null;
+    }
+    activeReqRef.current += 1;   // invalidate any late replies
 
+    // fresh chess state
+    const fresh = new Chess();
     setGame(fresh);
     setBoardState(fresh.board());
-
-    setMoveHistory([]);
-    setUciHistory([]);
+    
+    // clear histories/selection
     uciRef.current = [];
-
-    setEvalScore(0.0);
-    setThinking(false);
+    setUciHistory([]);
+    setMoveHistory([]);
     setSelectedSquare(null);
     setLegalTargets([]);
 
-    setGameStatus("");
-
+    // UI flags
+    setThinking(false);
     setEngineError(false);
+    setEvalScore(0.0);
+
+    // NEW: non-blocking “check” flow flags
+    setInCheck(false);
+    gameOverRef.current = false; 
+    setGameStatus("");
   }
 
-
+  function formatEval(cp) {
+    if (cp == null || Number.isNaN(cp)) return "";
+    const score = (cp / 100).toFixed(2);
+    return (cp >= 0 ? "+" : "") + score;
+  }
 
   const squareSizePx = boardPx / 8;
 
@@ -476,41 +516,19 @@ export default function ChessBoardUI() {
 
                         {/* piece */}
                         {squareObj && (
-                          <div
-                            className="absolute flex items-center justify-center"
+                          <img
+                            alt={`${squareObj.color}${squareObj.type}`}
+                            src={pieceSrc(squareObj.type, squareObj.color)}
+                            className="absolute inset-0 m-auto select-none pointer-events-none"
                             style={{
-                              left: 0,
-                              top: 0,
-                              width: "100%",
-                              height: "100%",
-                              fontSize: squareSizePx * 0.7 + "px",
-                              lineHeight: 1,
-                              color:
-                                squareObj.color === "w" ? "#fff" : "#000",
-                              WebkitTextStroke:
-                                squareObj.color === "w"
-                                  ? "1px rgba(0,0,0,0.8)"
-                                  : "1px rgba(255,255,255,0.8)",
-                              filter:
-                                squareObj.color === "w"
-                                  ? "drop-shadow(0 0 6px rgba(255,255,255,0.5))"
-                                  : "drop-shadow(0 0 6px rgba(0,0,0,0.9))",
-                              textShadow:
-                                squareObj.color === "w"
-                                  ? "0 0 10px rgba(255,255,255,0.4)"
-                                  : "0 0 10px rgba(0,0,0,0.8)",
-                              fontFamily:
-                                "'Segoe UI Symbol','Noto Sans Symbols2','Apple Color Emoji','Twemoji Mozilla','sans-serif'",
+                              width: "85%",
+                              height: "85%",
+                              filter: squareObj.color === "w"
+                                ? "drop-shadow(0 0 6px rgba(255,255,255,0.4))"
+                                : "drop-shadow(0 0 6px rgba(0,0,0,0.6))",
                             }}
-                          >
-                            {
-                              PIECE_UNICODE[
-                                squareObj.color === "w"
-                                  ? squareObj.type.toUpperCase()
-                                  : squareObj.type
-                              ]
-                            }
-                          </div>
+                            draggable={false}
+                          />
                         )}
 
                         {/* legal move indicator */}
@@ -575,6 +593,12 @@ export default function ChessBoardUI() {
                     </button>
                 </div>
             )}
+
+            {!gameStatus && !engineError && (
+              <div className="mt-1 text-xs text-slate-400 text-center">
+                Engine eval: <span className="text-slate-200">{formatEval(evalScore)}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -583,6 +607,19 @@ export default function ChessBoardUI() {
           className="w-full lg:w-[220px] flex-shrink-0"
           style={{ maxWidth: "220px" }}
         >
+          {/* Engine speed dropdown */}
+          <div className="mb-3 text-xs text-slate-300">
+            <label className="mr-2">Engine speed:</label>
+            <select
+              value={moveTimeMs}
+              onChange={(e) => setMoveTimeMs(Number(e.target.value))}
+              className="bg-black/30 border border-white/10 rounded px-2 py-1"
+            >
+              <option value={200}>Bullet (200ms)</option>
+              <option value={500}>Fast (500ms)</option>
+              <option value={2000}>Slow (2000ms)</option>
+            </select>
+          </div>
           <MoveHistory
             history={moveHistory}
             evalScore={evalScore}

@@ -74,7 +74,7 @@ class EngineRunner:
         eval_score = 0.0
 
         # be generous: movetime + 5 seconds safety
-        deadline = time.time() + (movetime_ms / 1000.0) + 5.0
+        deadline = time.time() + (movetime_ms / 1000.0) + 8.0  #+5.0 prev
 
         while time.time() < deadline:
             try:
@@ -114,6 +114,22 @@ class EngineRunner:
                 if len(tokens) >= 2:
                     best_move = tokens[1]
                 break
+
+        # SAFETY FALLBACK: ensure we always return a move
+        if not best_move or best_move == "None":
+            print("[WARN] Engine returned None — generating fallback move")
+            try:
+                import chess
+                board = chess.Board()
+                legal_moves = list(board.legal_moves)
+                if legal_moves:
+                    best_move = legal_moves[0].uci()
+                    print(f"[FALLBACK] Using legal move {best_move}")
+                else:
+                    print("[FALLBACK] No legal moves found — returning None")
+            except Exception as e:
+                print(f"[ERROR] Fallback generation failed: {e}")
+                best_move = None
 
         return best_move, eval_score
 
