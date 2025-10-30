@@ -3,7 +3,14 @@ from flask_cors import CORS
 from engine_runner import engine
 
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
+# CORS(app, resources={r"/*": {
+#     "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+#     "supports_credentials": False,
+#     "allow_headers": ["Content-Type"],
+#     "methods": ["GET", "POST", "OPTIONS"]
+# }})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -11,6 +18,8 @@ def health():
 
 @app.route("/move", methods=["POST"])
 def move():
+    if request.method == "OPTIONS":
+        return ("", 204)
     data = request.get_json(force=True)
 
     moves_list = data.get("moves", [])
@@ -43,4 +52,6 @@ def move():
 
 if __name__ == "__main__":
     # local dev
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    print(">>> Starting Flask on 127.0.0.1:5055")
+    app.run(host="127.0.0.1", port=5055, debug=True)
+    # app.run(host="0.0.0.0", port=5055, debug=True)

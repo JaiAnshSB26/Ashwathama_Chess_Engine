@@ -171,7 +171,8 @@ export default function ChessBoardUI() {
 
     console.log("[FETCH -> /move] payload =", payload);
 
-    fetch("http://127.0.0.1:5001/move", {
+    // earlier (somehow worked before laptop restarted): fetch("http://127.0.0.1.5001/move", {)
+    fetch("http://127.0.0.1:5055/move", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
