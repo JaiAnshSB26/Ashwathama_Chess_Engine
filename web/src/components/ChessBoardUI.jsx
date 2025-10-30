@@ -59,6 +59,20 @@ export default function ChessBoardUI() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  //mapping
+  const pieceSrc = (type, color) => {
+    // chess.js uses type in ['p','n','b','r','q','k'] and color 'w'|'b'
+    // type: 'p'|'n'|'b'|'r'|'q'|'k' ; color: 'w'|'b'
+    // const key = (color === 'w' ? type.toUpperCase() : type);
+    // return `/pieces/${key}.svg`;
+    return `/pieces/${color}${type.toUpperCase()}.svg`; // e.g., wP.svg, bQ.svg
+  };
+
+  function formatEval(cp) {
+    if (cp == null || Number.isNaN(cp)) return "—";
+    const score = (cp / 100).toFixed(2);
+    return (cp >= 0 ? "+" : "") + score;
+  }
   // translate indices to squares like "e4"
   function idxToSquare(fileIdx, rankIdxFromTop) {
     const rankNumber = 8 - rankIdxFromTop;
@@ -476,41 +490,19 @@ export default function ChessBoardUI() {
 
                         {/* piece */}
                         {squareObj && (
-                          <div
-                            className="absolute flex items-center justify-center"
+                          <img
+                            alt={`${squareObj.color}${squareObj.type}`}
+                            src={pieceSrc(squareObj.type, squareObj.color)}
+                            className="absolute inset-0 m-auto select-none pointer-events-none"
                             style={{
-                              left: 0,
-                              top: 0,
-                              width: "100%",
-                              height: "100%",
-                              fontSize: squareSizePx * 0.7 + "px",
-                              lineHeight: 1,
-                              color:
-                                squareObj.color === "w" ? "#fff" : "#000",
-                              WebkitTextStroke:
-                                squareObj.color === "w"
-                                  ? "1px rgba(0,0,0,0.8)"
-                                  : "1px rgba(255,255,255,0.8)",
-                              filter:
-                                squareObj.color === "w"
-                                  ? "drop-shadow(0 0 6px rgba(255,255,255,0.5))"
-                                  : "drop-shadow(0 0 6px rgba(0,0,0,0.9))",
-                              textShadow:
-                                squareObj.color === "w"
-                                  ? "0 0 10px rgba(255,255,255,0.4)"
-                                  : "0 0 10px rgba(0,0,0,0.8)",
-                              fontFamily:
-                                "'Segoe UI Symbol','Noto Sans Symbols2','Apple Color Emoji','Twemoji Mozilla','sans-serif'",
+                              width: "85%",
+                              height: "85%",
+                              filter: squareObj.color === "w"
+                                ? "drop-shadow(0 0 6px rgba(255,255,255,0.4))"
+                                : "drop-shadow(0 0 6px rgba(0,0,0,0.6))",
                             }}
-                          >
-                            {
-                              PIECE_UNICODE[
-                                squareObj.color === "w"
-                                  ? squareObj.type.toUpperCase()
-                                  : squareObj.type
-                              ]
-                            }
-                          </div>
+                            draggable={false}
+                          />
                         )}
 
                         {/* legal move indicator */}
@@ -574,6 +566,12 @@ export default function ChessBoardUI() {
                         New Game
                     </button>
                 </div>
+            )}
+
+            {!gameStatus && !engineError && (
+              <div className="mt-1 text-xs text-slate-400 text-center">
+                Engine eval: <span className="text-slate-200">{formatEval(evalScore)}</span>
+              </div>
             )}
           </div>
         </div>
