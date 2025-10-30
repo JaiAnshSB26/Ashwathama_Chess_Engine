@@ -71,10 +71,10 @@ class EngineRunner:
 
     def _read_bestmove_block(self, movetime_ms: int):
         best_move = None
-        eval_score = 0.0
+        eval_cp = None # default if none received 0.0 before.
 
         # be generous: movetime + 5 seconds safety
-        deadline = time.time() + (movetime_ms / 1000.0) + 5.0
+        deadline = time.time() + (movetime_ms / 1000.0) + 15.0  #Good safety buffer for deep searches.
 
         while time.time() < deadline:
             try:
@@ -89,24 +89,20 @@ class EngineRunner:
             # eval parsing
             if "score cp" in line:
                 parts = line.split()
-                if "cp" in parts:
-                    idx = parts.index("cp")
-                    if idx + 1 < len(parts):
-                        try:
-                            eval_score = int(parts[idx + 1]) / 100.0
-                        except:
-                            pass
+                try:
+                    i = parts.index("cp")
+                    eval_cp = int(parts[i+1])
+                except Exception:
+                    pass
 
             elif "score mate" in line:
                 parts = line.split()
-                if "mate" in parts:
-                    idx = parts.index("mate")
-                    if idx + 1 < len(parts):
-                        try:
-                            mate_val = int(parts[idx + 1])
-                            eval_score = 100.0 if mate_val > 0 else -100.0
-                        except:
-                            pass
+                try:
+                    i = parts.index("mate")
+                    mate = int(parts[i+1])
+                    eval_cp = 100000 if mate > 0 else -100000
+                except Exception:
+                    pass
 
             # the golden signal:
             if line.startswith("bestmove"):
@@ -114,8 +110,12 @@ class EngineRunner:
                 if len(tokens) >= 2:
                     best_move = tokens[1]
                 break
+        # default to 0 if engine never reported a score (keeps API consistent)
+        if eval_cp is None:
+            eval_cp = 0
 
-        return best_move, eval_score
+        # return cp, not already divided
+        return best_move, eval_cp
 
 
     def get_bestmove_from_moves(self, moves_list, movetime_ms=500):

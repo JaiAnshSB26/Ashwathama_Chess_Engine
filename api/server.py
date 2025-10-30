@@ -27,12 +27,12 @@ def move():
 
     print(f"[/move] moves_list = {moves_list} movetime = {movetime}")
 
-    bestmove, eval_score = engine.get_bestmove_from_moves(
+    bestmove, eval_cp = engine.get_bestmove_from_moves(
         moves_list,
         movetime_ms=movetime,
     )
 
-    print(f"[/move] engine returned: {bestmove} {eval_score}")
+    print(f"[/move] engine returned: {bestmove} {eval_cp}")
 
     # HARDENING: don't 500 if engine fails to emit a move
     if not bestmove:
@@ -40,14 +40,14 @@ def move():
 
         return jsonify({
             "bestmove": None,
-            "eval": eval_score,
+            "eval": (eval_cp / 100.0) if isinstance(eval_cp, (int, float)) else None,
             "note": "engine had no move (likely internal fail)",
             "moves_seen": moves_list,
         }), 200
 
     return jsonify({
         "bestmove": bestmove,
-        "eval": eval_score,
+        "eval": (eval_cp / 100.0) if isinstance(eval_cp, (int, float)) else None,
     }), 200
 
 if __name__ == "__main__":

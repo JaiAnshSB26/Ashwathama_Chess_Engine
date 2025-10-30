@@ -68,11 +68,18 @@ export default function ChessBoardUI() {
     return `/pieces/${color}${type.toUpperCase()}.svg`; // e.g., wP.svg, bQ.svg
   };
 
-  function formatEval(cp) {
-    if (cp == null || Number.isNaN(cp)) return "—";
-    const score = (cp / 100).toFixed(2);
-    return (cp >= 0 ? "+" : "") + score;
+  // function formatEval(cp) {
+  //   if (cp == null || Number.isNaN(cp)) return "—";
+  //   const score = (cp / 100).toFixed(2);
+  //   return (cp >= 0 ? "+" : "") + score;
+  // }
+  function formatEval(pawns) {
+    if (pawns == null || Number.isNaN(pawns)) return "—";
+    // if you later map mates to big numbers, show a shorthand
+    if (Math.abs(pawns) > 50) return pawns > 0 ? "#+" : "#-";
+    return (pawns >= 0 ? "+" : "") + pawns.toFixed(2);
   }
+
   // translate indices to squares like "e4"
   function idxToSquare(fileIdx, rankIdxFromTop) {
     const rankNumber = 8 - rankIdxFromTop;
