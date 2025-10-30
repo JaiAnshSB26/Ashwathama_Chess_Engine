@@ -2,7 +2,6 @@
 # C++ Build Artifacts
 # ============================================
 # Binaries
-*.exe
 *.out
 *.app
 Ashwathama
