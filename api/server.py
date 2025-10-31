@@ -10,7 +10,21 @@ app = Flask(__name__)
 #     "allow_headers": ["Content-Type"],
 #     "methods": ["GET", "POST", "OPTIONS"]
 # }})
-CORS(app, resources={r"/*": {"origins": "*"}})
+FRONTENDS = [
+    "https://www.ashwathama-chess.com",
+    "https://ashwathama-chess.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+CORS(app, resources={r"/*": {"origins": FRONTENDS}})
+
+@app.after_request
+def add_cors_headers(resp):
+    # helpful for preflight
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Vary"] = "Origin"
+    return resp
 
 @app.route("/health", methods=["GET"])
 def health():
