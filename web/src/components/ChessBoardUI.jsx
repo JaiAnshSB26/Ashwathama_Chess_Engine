@@ -42,6 +42,14 @@ export default function ChessBoardUI() {
   const [engineError, setEngineError] = useState(false);
   const engineErrorRef = useRef(false);
 
+  const fetchAbortRef = useRef(null);
+  const activeReqRef = useRef(0);   // id of the latest in-flight request
+  const [reqId, setReqId] = useState(0);
+
+  useEffect(() => {
+    engineErrorRef.current = engineError;
+  }, [engineError]);
+
   const BACKEND =
     import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5055";
 
@@ -120,45 +128,30 @@ export default function ChessBoardUI() {
   // -------------------------
   // Core gameplay logic
   // -------------------------
-  function applyMove(from, to) {
-    // clone current board
+  async function applyMove(from, to) {
     const afterHuman = new Chess(game.fen());
 
     let humanResult = null;
     try {
-      humanResult = afterHuman.move({
-        from,
-        to,
-        promotion: "q",
-      });
+      humanResult = afterHuman.move({ from, to, promotion: "q" });
     } catch (err) {
       console.warn("[CLIENT] illegal move threw", { from, to }, err);
-
-      // important: unlock UI so user can click something else
       setSelectedSquare(null);
       setLegalTargets([]);
       return;
     }
-
     if (!humanResult) {
       console.warn("[CLIENT] move rejected as illegal", { from, to });
-
-      // same unlock
       setSelectedSquare(null);
       setLegalTargets([]);
       return;
     }
 
-    // ... keep rest of your logic the same after this point
-    const humanMoveUCI =
-      humanResult.from + humanResult.to + (humanResult.promotion || "");
-
-    // update visible board + SAN history
+    const humanMoveUCI = humanResult.from + humanResult.to + (humanResult.promotion || "");
     setGame(afterHuman);
     setBoardState(afterHuman.board());
     setMoveHistory((prev) => [...prev, humanResult.san]);
 
-    // ---- Update UCI history (ref + state, synchronous) ----
     const historyAfterHuman = [...uciRef.current, humanMoveUCI];
     uciRef.current = historyAfterHuman;
     setUciHistory(historyAfterHuman);
@@ -170,10 +163,8 @@ export default function ChessBoardUI() {
     console.log("  updatedUciHistoryAfterHuman =", historyAfterHuman);
     console.log("  FEN afterHuman =", afterHuman.fen());
 
-    // update status text (check, mate, etc.)
     updateStatus(afterHuman);
 
-    // stop if game ended (if game already ended from the human move, stop and don't ask engine)
     if (afterHuman.isGameOver()) {
       console.log("[GAME OVER] after human move");
       setThinking(false);
@@ -182,127 +173,121 @@ export default function ChessBoardUI() {
       return;
     }
 
-    // clear selection and mark engine thinking
+    // ---- single-flight + abort previous ----
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
+    const myReq = reqId + 1;
+    setReqId(myReq);
+    activeReqRef.current = myReq;
+
     setThinking(true);
     setSelectedSquare(null);
     setLegalTargets([]);
 
-    const payload = {
-      moves: historyAfterHuman,
-      movetime: 500,
-    };
-
+    const payload = { moves: historyAfterHuman, movetime: 500 };
     console.log("[FETCH -> /move] payload =", payload);
 
-    // earlier (somehow worked before laptop restarted): fetch("http://127.0.0.1.5055/move", {)
-    fetch(`${BACKEND}/move`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => {
-        console.log("[ENGINE RESPONSE STATUS]", res.status);
-        return res.json();
-      })
-      .then((data) => {
-        console.log("[/move RESPONSE]", data);
-
-        if (!data.bestmove) {
-          console.error("[ENGINE ERROR]", data);
-          // freeze the game so we don't desync
-          setEngineError(true);
-          setGameStatus("Engine error — please start a New Game");
-          setThinking(false);
-          setSelectedSquare(null);
-          setLegalTargets([]);
-          return;
-        }
-
-        const engineMoveUCI = data.bestmove;
-        const engineFrom = engineMoveUCI.slice(0, 2);
-        const engineTo = engineMoveUCI.slice(2, 4);
-        const enginePromotion =
-          engineMoveUCI.length > 4 ? engineMoveUCI.slice(4, 5) : undefined;
-
-        const afterEngine = new Chess(afterHuman.fen());
-        let engineResult = null;
-        try {
-          engineResult = afterEngine.move({
-            from: engineFrom,
-            to: engineTo,
-            promotion: enginePromotion || "q",
-          });
-        } catch (err) {
-          console.error("[ENGINE ILLEGAL MOVE THROW?]", engineMoveUCI, err);
-          setEngineError(true);
-          return;
-        }
-        if (!engineResult) {
-          console.error("[ENGINE ILLEGAL MOVE?]", engineMoveUCI);
-          setEngineError(true);
-          return;
-        }
-
-        // update UI board after engine reply
-        setGame(afterEngine);
-        setBoardState(afterEngine.board());
-        setMoveHistory((prev) => [...prev, engineResult.san]);
-
-        updateStatus(afterEngine);
-
-        if (afterEngine.isGameOver()) {
-            // game ended on engine's move, freeze thinking
-            setThinking(false);
-        }
-
-        // ---- Update UCI history again (ref + state) ----
-        const finalHistory = [...historyAfterHuman, engineMoveUCI];
-        uciRef.current = finalHistory;
-        setUciHistory(finalHistory);
-
-        console.log("[ENGINE MOVE APPLIED]");
-        console.log("  engineMoveUCI =", engineMoveUCI);
-        console.log("  engineResult.san =", engineResult.san);
-        console.log("  finalHistory =", finalHistory);
-        console.log("  FEN afterEngine =", afterEngine.fen());
-
-        if (typeof data.eval === "number") {
-          setEvalScore(data.eval);
-        }
-
-        //Update status after engine move.
-        updateStatus(afterEngine);
-
-        //If engine just ended the game.
-        if (afterEngine.isGameOver()) {
-            console.log("[GAME OVER] after engine move");
-            // thinking will also get cleared in finally
-            // but we can defensively kill highlights here
-            setThinking(false);
-            setSelectedSquare(null);
-            setLegalTargets([]);
-        }
-      })
-      .catch((err) => {
-        console.error("[FETCH ERROR]", err);
-        setEngineError(true);
-      })
-      .finally(() => {
-        if (!engineErrorRef.current) {
-          setThinking(false);
-          setSelectedSquare(null);
-          setLegalTargets([]);
-        } else {
-            setThinking(false);
-        }
-        console.log("----------------------------------------------------");
+    try {
+      const res = await fetch(`${BACKEND}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      console.log("[ENGINE RESPONSE STATUS]", res.status);
+      const data = await res.json();
+      console.log("[/move RESPONSE]", data);
+
+      // ignore stale/aborted replies
+      if (myReq !== activeReqRef.current) {
+        return;
+      }
+
+      if (!data.bestmove) {
+        console.error("[ENGINE ERROR]", data);
+        setEngineError(true);
+        setGameStatus("Engine error — please start a New Game");
+        setThinking(false);
+        setSelectedSquare(null);
+        setLegalTargets([]);
+        return;
+      }
+
+      const engineMoveUCI = data.bestmove;
+      const engineFrom = engineMoveUCI.slice(0, 2);
+      const engineTo = engineMoveUCI.slice(2, 4);
+      const enginePromotion = engineMoveUCI.length > 4 ? engineMoveUCI.slice(4, 5) : undefined;
+
+      const afterEngine = new Chess(afterHuman.fen());
+      let engineResult = null;
+      try {
+        engineResult = afterEngine.move({
+          from: engineFrom,
+          to: engineTo,
+          promotion: enginePromotion || "q",
+        });
+      } catch (err) {
+        console.error("[ENGINE ILLEGAL MOVE THROW?]", engineMoveUCI, err);
+        setEngineError(true);
+        return;
+      }
+      if (!engineResult) {
+        console.error("[ENGINE ILLEGAL MOVE?]", engineMoveUCI);
+        setEngineError(true);
+        return;
+      }
+
+      setGame(afterEngine);
+      setBoardState(afterEngine.board());
+      setMoveHistory((prev) => [...prev, engineResult.san]);
+      updateStatus(afterEngine);
+
+      const finalHistory = [...historyAfterHuman, engineMoveUCI];
+      uciRef.current = finalHistory;
+      setUciHistory(finalHistory);
+
+      console.log("[ENGINE MOVE APPLIED]");
+      console.log("  engineMoveUCI =", engineMoveUCI);
+      console.log("  engineResult.san =", engineResult.san);
+      console.log("  finalHistory =", finalHistory);
+      console.log("  FEN afterEngine =", afterEngine.fen());
+
+      if (typeof data.eval === "number") {
+        setEvalScore(data.eval); // pawns if server divides by 100; your formatEval() already expects pawns
+      }
+
+      if (afterEngine.isGameOver()) {
+        console.log("[GAME OVER] after engine move");
+      }
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("[FETCH ABORTED]");
+        return;
+      }
+      console.error("[FETCH ERROR]", err);
+      setEngineError(true);
+    } finally {
+      if (!engineErrorRef.current) {
+        setThinking(false);
+        setSelectedSquare(null);
+        setLegalTargets([]);
+      } else {
+        setThinking(false);
+      }
+      console.log("----------------------------------------------------");
+    }
   }
+
 
   // -------------------------
   // UI click handling
   // -------------------------
   function handleSquareClick(squareName) {
+    if (thinking || gameStatus) return;
     if (!selectedSquare) {
       const piece = game.get(squareName);
       if (!piece) return;
@@ -375,22 +360,25 @@ export default function ChessBoardUI() {
   }
 
   function resetGame() {
-    const fresh = new Chess();
 
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+      fetchAbortRef.current = null;
+    }
+
+    activeReqRef.current += 1; // invalidate any late replies
+
+    const fresh = new Chess();
     setGame(fresh);
     setBoardState(fresh.board());
-
     setMoveHistory([]);
     setUciHistory([]);
     uciRef.current = [];
-
     setEvalScore(0.0);
     setThinking(false);
     setSelectedSquare(null);
     setLegalTargets([]);
-
     setGameStatus("");
-
     setEngineError(false);
   }
 
@@ -601,3 +589,5 @@ export default function ChessBoardUI() {
     </div>
   );
 }
+
+
